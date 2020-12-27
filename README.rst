@@ -1,3 +1,14 @@
+A fork from codelucas/newspaper. I have changed the source.build and article.download methods of this repo to function with the aiohttp library so that html downloading can happen asynchronously. For example,
+
+.. code-block:: pycon
+
+    >>> import newspaper
+    
+    >>> source = newspaper.Source("http://cnn.com")
+    >>> await source.build()
+    >>> article = source.articles[0]
+    >>> await article.download()
+
 Newspaper3k: Article scraping & curation
 ========================================
 
