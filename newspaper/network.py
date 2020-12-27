@@ -10,6 +10,7 @@ __copyright__ = 'Copyright 2014, Lucas Ou-Yang'
 
 import logging
 import requests
+import aiohttp
 
 from .configuration import Configuration
 from .mthreading import ThreadPool
@@ -34,17 +35,30 @@ def get_request_kwargs(timeout, useragent, proxies, headers):
     }
 
 
-def get_html(url, config=None, response=None):
+def get_request_kwargs_async(timeout, useragent):
+    """This Wrapper method exists b/c some values in req_kwargs dict
+    are methods which need to be called every time we make a request
+    """
+    return {
+        'headers': {'User-Agent': useragent},
+        'cookies': cj(),
+        'timeout': timeout,
+        'allow_redirects': True,
+    }
+
+
+async def get_html(url, config=None, response=None):
     """HTTP response code agnostic
     """
     try:
-        return get_html_2XX_only(url, config, response)
+        response = await get_html_2XX_only(url, config, response)
+        return response
     except requests.exceptions.RequestException as e:
         log.debug('get_html() error. %s on URL: %s' % (e, url))
         return ''
 
 
-def get_html_2XX_only(url, config=None, response=None):
+async def get_html_2XX_only(url, config=None, response=None):
     """Consolidated logic for http requests from newspaper. We handle error cases:
     - Attempt to find encoding of the html by using HTTP header. Fallback to
       'ISO-8859-1' if not provided.
@@ -53,16 +67,13 @@ def get_html_2XX_only(url, config=None, response=None):
     config = config or Configuration()
     useragent = config.browser_user_agent
     timeout = config.request_timeout
-    proxies = config.proxies
-    headers = config.headers
 
     if response is not None:
-        return _get_html_from_response(response, config)
+        return response.text
 
-    response = requests.get(
-        url=url, **get_request_kwargs(timeout, useragent, proxies, headers))
-
-    html = _get_html_from_response(response, config)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url, **get_request_kwargs_async(timeout, useragent)) as response:
+            html = await _get_html_from_response(response, config)
 
     if config.http_success_only:
         # fail if HTTP sends a non 2XX response
@@ -71,21 +82,13 @@ def get_html_2XX_only(url, config=None, response=None):
     return html
 
 
-def _get_html_from_response(response, config):
+async def _get_html_from_response(response, config):
     if response.headers.get('content-type') in config.ignored_content_types_defaults:
         return config.ignored_content_types_defaults[response.headers.get('content-type')]
-    if response.encoding != FAIL_ENCODING:
-        # return response as a unicode string
-        html = response.text
-    else:
-        html = response.content
-        if 'charset' not in response.headers.get('content-type'):
-            encodings = requests.utils.get_encodings_from_content(response.text)
-            if len(encodings) > 0:
-                response.encoding = encodings[0]
-                html = response.text
 
-    return html or ''
+    html = await response.text()
+
+    return html
 
 
 class MRequest(object):

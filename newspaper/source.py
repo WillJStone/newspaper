@@ -84,19 +84,19 @@ class Source(object):
         self.is_parsed = False
         self.is_downloaded = False
 
-    def build(self):
+    async def build(self):
         """Encapsulates download and basic parsing with lxml. May be a
         good idea to split this into download() and parse() methods.
         """
-        self.download()
+        await self.download()
         self.parse()
 
         self.set_categories()
-        self.download_categories()  # mthread
+        await self.download_categories()  # mthread
         self.parse_categories()
 
-        self.set_feeds()
-        self.download_feeds()  # mthread
+        await self.set_feeds()
+        await self.download_feeds()  # mthread
         # self.parse_feeds()
 
         self.generate_articles()
@@ -128,7 +128,7 @@ class Source(object):
         urls = self._get_category_urls(self.domain)
         self.categories = [Category(url=url) for url in urls]
 
-    def set_feeds(self):
+    async def set_feeds(self):
         """Don't need to cache getting feed urls, it's almost
         instant with xpath
         """
@@ -151,8 +151,7 @@ class Source(object):
         for index, _ in enumerate(common_feed_urls_as_categories):
             response = requests[index].resp
             if response and response.ok:
-                common_feed_urls_as_categories[index].html = network.get_html(
-                    response.url, response=response)
+                common_feed_urls_as_categories[index].html = await network.get_html(response.url, response=response)
 
         common_feed_urls_as_categories = [c for c in common_feed_urls_as_categories if c.html]
 
@@ -174,12 +173,12 @@ class Source(object):
         desc = self.extractor.get_meta_description(self.doc)
         self.description = desc
 
-    def download(self):
+    async def download(self):
         """Downloads html of source
         """
-        self.html = network.get_html(self.url, self.config)
+        self.html = await network.get_html(self.url, self.config)
 
-    def download_categories(self):
+    async def download_categories(self):
         """Download all category html, can use mthreading
         """
         category_urls = [c.url for c in self.categories]
@@ -188,15 +187,14 @@ class Source(object):
         for index, _ in enumerate(self.categories):
             req = requests[index]
             if req.resp is not None:
-                self.categories[index].html = network.get_html(
-                    req.url, response=req.resp)
+                self.categories[index].html = await network.get_html(req.url, response=req.resp)
             else:
                 log.warning(('Deleting category %s from source %s due to '
                              'download error') %
-                             (self.categories[index].url, self.url))
+                            (self.categories[index].url, self.url))
         self.categories = [c for c in self.categories if c.html]
 
-    def download_feeds(self):
+    async def download_feeds(self):
         """Download all feed html, can use mthreading
         """
         feed_urls = [f.url for f in self.feeds]
@@ -205,12 +203,11 @@ class Source(object):
         for index, _ in enumerate(self.feeds):
             req = requests[index]
             if req.resp is not None:
-                self.feeds[index].rss = network.get_html(
-                    req.url, response=req.resp)
+                self.feeds[index].rss = await network.get_html(req.url, response=req.resp)
             else:
                 log.warning(('Deleting feed %s from source %s due to '
                              'download error') %
-                             (self.categories[index].url, self.url))
+                            (self.categories[index].url, self.url))
         self.feeds = [f for f in self.feeds if f.rss]
 
     def parse(self):
@@ -228,7 +225,7 @@ class Source(object):
         """Parse out the lxml root in each category
         """
         log.debug('We are extracting from %d categories' %
-                  len(self.categories))
+                 len(self.categories))
         for category in self.categories:
             doc = self.config.get_parser().fromstring(category.html)
             category.doc = doc
@@ -352,7 +349,7 @@ class Source(object):
         else:
             if threads > NUM_THREADS_PER_SOURCE_WARN_LIMIT:
                 log.warning(('Using %s+ threads on a single source '
-                            'may result in rate limiting!') % NUM_THREADS_PER_SOURCE_WARN_LIMIT)
+                             'may result in rate limiting!') % NUM_THREADS_PER_SOURCE_WARN_LIMIT)
             filled_requests = network.multithread_request(urls, self.config)
             # Note that the responses are returned in original order
             for index, req in enumerate(filled_requests):
