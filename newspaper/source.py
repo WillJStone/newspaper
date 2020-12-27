@@ -224,8 +224,7 @@ class Source(object):
     def parse_categories(self):
         """Parse out the lxml root in each category
         """
-        log.debug('We are extracting from %d categories' %
-                 len(self.categories))
+        log.debug('We are extracting from %d categories' % len(self.categories))
         for category in self.categories:
             doc = self.config.get_parser().fromstring(category.html)
             category.doc = doc
