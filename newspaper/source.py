@@ -331,7 +331,7 @@ class Source(object):
         log.debug('%d articles generated and cutoff at %d',
                   len(articles), limit)
 
-    def download_articles(self, threads=1):
+    async def download_articles(self, threads=1):
         """Downloads all articles attached to self
         """
         # TODO fix how the article's is_downloaded is not set!
@@ -341,7 +341,7 @@ class Source(object):
         if threads == 1:
             for index, article in enumerate(self.articles):
                 url = urls[index]
-                html = network.get_html(url, config=self.config)
+                html = await network.get_html(url, config=self.config)
                 self.articles[index].set_html(html)
                 if not html:
                     failed_articles.append(self.articles[index])
